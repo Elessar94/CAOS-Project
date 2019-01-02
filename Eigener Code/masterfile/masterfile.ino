@@ -1,78 +1,103 @@
-#inclube <Bounce2.h>
+#include <Bounce2.h>
 #include <SPI.h> //übertragungsprotokoll, if no more jobs to do, we can replace this with i^2C  
+
 //TODO include eeprom code to store old values. Maybe check monthslater, but improve. 
 //TODO add that LED blinks in delay speed. 
 
+///////PINS///////
+
 int tasterPin = 2;
-int analogPotValue;
-int factor = 16; //Toggle switch for slowing down the input 
-int clockSource = 11; 
 int redLED = 7;
 int blueLED = 8;
 int effectLED = 9; //Check this pin-choice
 int tappingLED = 10;
+int clockSource = 11; 
 int offPin = 12; //if the effect is off, a pin is needed. TODO check this pinchoice
 int analogPot = 14; 
+int factor = 16; //Toggle switch for slowing down the input 
+
+//////Overall variables///////
+SPI.begin();
+Bounce debouncer = Bounce(); //TODO we have to check what this debouncer does EXACTLY. All debouncing lines have to be reconsidered. 
 bool switchmode = HIGH;     // HIGH = Switchmode / LOW = Tapmode
 bool buttonPressed;
-bool effectRunning = LOW; 
+
 int startTime; //this stores the micros, when the button was started to be pressed.
 int currentTime; 
 int changeCutoff = 1000000; //this constant stores the time we wait until we switch the mode in micros.  
+
+//////Switch mode//////
+
+bool effectRunning = LOW; 
+
+
+//////Tap mode //////
+
+int currentTapLoopTime;
+
 int tapCutoff = 3;
 int timesTapped = 0;
 int lastTapTime;
 int firstTapTime;
 bool tapping = false;  
+
 int maxInterval = 560000; //TODO these two values should be read from eeprom if possible. 
 int minInterval = 38000;
 long int interval;
-int currentTapLoopTime;
-int nextDimTime;
-int blinkTime = 1;
-bool stillTapping = false ;
 int mappedInterval;
 int mappedIntervalDiv;
 int intervalDiv;
+bool divisionStatus; //TODO there is no way all these variables are necessary. Find better/cheaper solution
+ 
+int analogPotValue;
 byte address = 0x11; //TODO change this? What does this mean exactly
-bool divisionStatus;  
-      
-Bounce debouncer = Bounce(); //TODO we have to check what this debouncer does EXACTLY. All debouncing lines have to be reconsidered. 
 
-void switchOnOff();
+//int nextDimTime;
+//int blinkTime = 1; //TODO depending on how we implement the flashing of the LEDs this might be unnecessary
+      
+
+//////Functions//////
+
 void switchLoop();
 void tapLoop();
-void setupSwitch();
-void setupTap();
-void checkSingles();
 void reset();
+
+void switchOnOff();
+
+void checkSingles();
 long int getInterval();
 void fireTap();
 double getDivision(long int interval);
 bool AnalogPotTurned();
 
-SPI.begin(); //TODO check what this method does. 
+/////////////////////////////////////////////////////////////
 
 void setup() {
-  /// SETUP SWITCHMODE /// 
+
+  //////SETUP Overall////// 
+  
   pinMode(tasterPin, INPUT);
-  pinMode(analogPot, INPUT);
-  pinMode(redLED, OUTPUT);
-  pinMode(blueLED, OUTPUT);
-  pinMode(offPin, OUTPUT);
-  pinMode(effectLED, OUTPUT);
-  pinMode(tappingLED, OUTPUT);
-  pinMode(clockSource, OUTPUT);
-  pinMode (factor, INPUT);
   debouncer.attach(tasterPin);
   debouncer.interval(25);
+  
+  pinMode(redLED, OUTPUT);
+  pinMode(blueLED, OUTPUT);
   digitalWrite(redLED, switchmode);
   digitalWrite(blueLED, !switchmode);
-  digitalWrite(effectLED, effectRunning);
- 
-
-  /// SETUP TAPMODE /// 
   
+  //////SETUP Switchmode//////
+  
+  pinMode(effectLED, OUTPUT);
+  digitalWrite(effectLED, effectRunning);
+  pinMode(offPin, OUTPUT);
+  pinMode(analogPot, INPUT);
+  
+  //////SETUP Tapmode//////
+  
+  pinMode(tappingLED, OUTPUT);  
+  pinMode(clockSource, OUTPUT); //belonging to the digitalPotentiometer
+  pinMode (factor, INPUT);
+    
 }
 
 void loop() {
@@ -116,7 +141,7 @@ void tapLoop(){
      buttonPressed = false;
      if (currentTime - startTime < changeCutoff) {
           digitalWrite(tappingLED, HIGH);
-          nextDimTime = currentTapLoopTime + blinkTime;
+          //nextDimTime = currentTapLoopTime + blinkTime;
           lastTapTime = currentTapLoopTime;
           fireTap();
       }  
@@ -136,8 +161,8 @@ SPI.transfer(address);
 SPI.transfer(mappedIntervalDiv);
 digitalWrite(clockSourse, HIGH);
 
-//flashLeds(mappedInterval, mappedIntervalDiv, stillTapping);
-//dimLeds(stillTapping);
+//flashLeds(mappedInterval, mappedIntervalDiv, tapping);
+//dimLeds(tapping);
 }
 void switchLoop(){
     if (debouncer.rose() ) {  // Button is pressed 
@@ -183,7 +208,7 @@ long int getInterval() { //TODO maybe add method to exclude outlier taps
 void fireTap(){
   if (timesTapped == 0) {
     firstTapTime = micros();
-    stillTapping = True; //TODO catch bug when we switch mode while tapping
+    tapping = true; //TODO catch bug when we switch mode while tapping
     }
     timesTapped++; 
 }
