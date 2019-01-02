@@ -1,13 +1,14 @@
 #inclube <Bounce2.h>
 #include <SPI.h> //übertragungsprotokoll, if no more jobs to do, we can replace this with i^2C  
 //TODO include eeprom code to store old values. Maybe check monthslater, but improve. 
+//TODO add that LED blinks in delay speed. 
 
 int tasterPin = 2;
 int analogPotValue;
 int factor = 16; //Toggle switch for slowing down the input 
 int clockSource = 11; 
-int switchLED = 7;
-int tapmodeLED = 8;
+int redLED = 7;
+int blueLED = 8;
 int effectLED = 9; //Check this pin-choice
 int tappingLED = 10;
 int offPin = 12; //if the effect is off, a pin is needed. TODO check this pinchoice
@@ -15,7 +16,6 @@ int analogPot = 14;
 bool switchmode = HIGH;     // HIGH = Switchmode / LOW = Tapmode
 bool buttonPressed;
 bool effectRunning = LOW; 
-bool effectOn = false;
 int startTime; //this stores the micros, when the button was started to be pressed.
 int currentTime; 
 int changeCutoff = 1000000; //this constant stores the time we wait until we switch the mode in micros.  
@@ -27,7 +27,7 @@ bool tapping = false;
 int maxInterval = 560000; //TODO these two values should be read from eeprom if possible. 
 int minInterval = 38000;
 long int interval;
-int currentTime2;
+int currentTapLoopTime;
 int nextDimTime;
 int blinkTime = 1;
 bool stillTapping = false ;
@@ -57,8 +57,8 @@ void setup() {
   /// SETUP SWITCHMODE /// 
   pinMode(tasterPin, INPUT);
   pinMode(analogPot, INPUT);
-  pinMode(switchLED, OUTPUT);
-  pinMode(tapmodeLED, OUTPUT);
+  pinMode(redLED, OUTPUT);
+  pinMode(blueLED, OUTPUT);
   pinMode(offPin, OUTPUT);
   pinMode(effectLED, OUTPUT);
   pinMode(tappingLED, OUTPUT);
@@ -66,8 +66,8 @@ void setup() {
   pinMode (factor, INPUT);
   debouncer.attach(tasterPin);
   debouncer.interval(25);
-  digitalWrite(switchLED, switchmode);
-  digitalWrite(tapmodeLED, !switchmode);
+  digitalWrite(redLED, switchmode);
+  digitalWrite(blueLED, !switchmode);
   digitalWrite(effectLED, effectRunning);
  
 
@@ -89,15 +89,15 @@ if (switchmode == LOW){ //Tapmode activated
 // change between modes 
 if (buttonPressed && (currentTime - startTime >= changeCutoff)) { 
   switchmode = !switchmode;
-  digitalWrite(switchLED, switchmode);
-  digitalWrite(tapmodeLED, !switchmode);
+  digitalWrite(redLED, switchmode);
+  digitalWrite(blueLED, !switchmode);
   buttonPressed = false; //avoid switching back and forth
   }
 }
 
 
 void tapLoop(){
-  currentTime2 = micros();
+  currentTapLoopTime = micros();
     checkSingles();
     if(timesTapped >= tapCutoff){
       interval = getInterval();
@@ -116,8 +116,8 @@ void tapLoop(){
      buttonPressed = false;
      if (currentTime - startTime < changeCutoff) {
           digitalWrite(tappingLED, HIGH);
-          nextDimTime = currentTime2 + blinkTime;
-          lastTapTime = currentTime2;
+          nextDimTime = currentTapLoopTime + blinkTime;
+          lastTapTime = currentTapLoopTime;
           fireTap();
       }  
     } //TODO add further calibration methods, maybe look into monthslater example 
@@ -134,7 +134,7 @@ mappedIntervalDiv = map(intervalDiv, minInterval, maxInterval, 0,255); //same as
 digitalWrite(clockSource, LOW);
 SPI.transfer(address);
 SPI.transfer(mappedIntervalDiv);
-digitalPotWrite(DigPotValue);
+digitalWrite(clockSourse, HIGH);
 
 //flashLeds(mappedInterval, mappedIntervalDiv, stillTapping);
 //dimLeds(stillTapping);
@@ -154,7 +154,8 @@ void switchLoop(){
 }
 void switchOnOff(){
   //TODO tell system to switch to the off pin, also consider this in the hardware situation. 
-  effectOn = !effectOn;
+  effectRunning = !effectRunning;
+  digitalWrite(effectLED, effectRunning);
   // do something with offPin
 }
 
