@@ -25,7 +25,7 @@ bool buttonPressed;
 int startTime; //this stores the micros, when the button was started to be pressed.
 int currentTime; 
 int changeCutoff = 1000; //this constant stores the time we wait until we switch the mode in millis
-
+s
 //////Switch mode//////
 
 bool effectRunning = HIGH; 
