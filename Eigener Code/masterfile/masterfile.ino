@@ -10,25 +10,25 @@ int tasterPin = 2;
 int redLED = 7;
 int blueLED = 8;
 int effectLED = 9; //Check this pin-choice
-int tappingLED = 10;
+//int tappingLED = 10; //TODO maybe include this if we can include the logic without a third LED
 int clockSource = 11; 
-int offPin = 12; //if the effect is off, a pin is needed. TODO check this pinchoice
+int relayPin = 12; //if this is high, the effect is on. 
 int analogPot = 14; 
 int factor = 16; //Toggle switch for slowing down the input 
 
 //////Overall variables///////
-SPI.begin();
+
 Bounce debouncer = Bounce(); //TODO we have to check what this debouncer does EXACTLY. All debouncing lines have to be reconsidered. 
 bool switchmode = HIGH;     // HIGH = Switchmode / LOW = Tapmode
 bool buttonPressed;
 
 int startTime; //this stores the micros, when the button was started to be pressed.
 int currentTime; 
-int changeCutoff = 1000000; //this constant stores the time we wait until we switch the mode in micros.  
+int changeCutoff = 1000; //this constant stores the time we wait until we switch the mode in millis
 
 //////Switch mode//////
 
-bool effectRunning = LOW; 
+bool effectRunning = HIGH; 
 
 
 //////Tap mode //////
@@ -42,21 +42,17 @@ int firstTapTime;
 bool tapping = false;  
 
 int maxInterval = 560000; //TODO these two values should be read from eeprom if possible. 
-int minInterval = 38000;
+int minInterval = 38000; //TODO are these time limits? should we divide them by 1k as we switched to millis? 
 long int interval;
 int mappedInterval;
 int mappedIntervalDiv;
 int intervalDiv;
-bool divisionStatus; //TODO there is no way all these variables are necessary. Find better/cheaper solution
+bool factorStatus; //TODO there is no way all these variables are necessary. Find better/cheaper solution
  
 int analogPotValue;
 byte address = 0x11; //TODO change this? What does this mean exactly
 
 //int nextDimTime;
-//int blinkTime = 1; //TODO depending on how we implement the flashing of the LEDs this might be unnecessary
-      
-
-//////Functions//////
 
 void switchLoop();
 void tapLoop();
@@ -67,7 +63,7 @@ void switchOnOff();
 void checkSingles();
 long int getInterval();
 void fireTap();
-double getDivision(long int interval);
+double getFactor(long int interval);
 bool AnalogPotTurned();
 
 /////////////////////////////////////////////////////////////
@@ -75,7 +71,7 @@ bool AnalogPotTurned();
 void setup() {
 
   //////SETUP Overall////// 
-  
+  SPI.begin();
   pinMode(tasterPin, INPUT);
   debouncer.attach(tasterPin);
   debouncer.interval(25);
@@ -89,12 +85,13 @@ void setup() {
   
   pinMode(effectLED, OUTPUT);
   digitalWrite(effectLED, effectRunning);
-  pinMode(offPin, OUTPUT);
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, effectRunning);
   pinMode(analogPot, INPUT);
   
   //////SETUP Tapmode//////
   
-  pinMode(tappingLED, OUTPUT);  
+ // pinMode(tappingLED, OUTPUT);  
   pinMode(clockSource, OUTPUT); //belonging to the digitalPotentiometer
   pinMode (factor, INPUT);
     
@@ -102,54 +99,55 @@ void setup() {
 
 void loop() {
   debouncer.update();
-  currentTime = micros();
-
-if (switchmode == HIGH) {   // Switchmode ON
-  switchLoop();
-  }
-if (switchmode == LOW){ //Tapmode activated
-  tapLoop(); 
-  }
+  currentTime = millis();
   
-// change between modes 
+  // change between modes 
 if (buttonPressed && (currentTime - startTime >= changeCutoff)) { 
   switchmode = !switchmode;
   digitalWrite(redLED, switchmode);
   digitalWrite(blueLED, !switchmode);
   buttonPressed = false; //avoid switching back and forth
   }
+if (switchmode == HIGH) {   // Switchmode ON
+  switchLoop();
+  }
+if (switchmode == LOW){ //Tapmode activated
+  tapLoop(); 
+  }
+
+
 }
 
 
 void tapLoop(){
-  currentTapLoopTime = micros();
+  currentTapLoopTime = millis();
     checkSingles();
     if(timesTapped >= tapCutoff){
       interval = getInterval();
-      divisionStatus = false; //This variable stores whether division is activated or not. 
+      factorStatus = false; //This variable stores whether division is activated or not. 
     } else if(AnalogPotTurned())
       {
-        interval = map(analogPotCurrVal, 0, 1023, minInterval, maxInterval);
-        divionStatus = true;      
+        interval = map(analogPotValue, 0, 1023, minInterval, maxInterval);
+        factorStatus = true;      
     }
-    
     if (debouncer.rose() ) {  // Button is pressed 
     startTime = currentTime;
     buttonPressed = true;
     }
+
     if (debouncer.fell()) { // Button is released, count this as Tap.
      buttonPressed = false;
      if (currentTime - startTime < changeCutoff) {
-          digitalWrite(tappingLED, HIGH);
+     //     digitalWrite(tappingLED, HIGH);
           //nextDimTime = currentTapLoopTime + blinkTime;
           lastTapTime = currentTapLoopTime;
           fireTap();
       }  
     } //TODO add further calibration methods, maybe look into monthslater example 
 
-    if (!divisionStatus){
-      intervalDiv = (long int)((interval / (getDivision(interval))+0.5)); //why + 0.5? 
-      }else if(divisionStatus == true){
+    if (!factorStatus){
+      intervalDiv = (long int)((interval / (getFactor(interval))+0.5)); //why + 0.5? 
+      }else if(factorStatus == true){
         intervalDiv = interval;
     }
 
@@ -159,15 +157,15 @@ mappedIntervalDiv = map(intervalDiv, minInterval, maxInterval, 0,255); //same as
 digitalWrite(clockSource, LOW);
 SPI.transfer(address);
 SPI.transfer(mappedIntervalDiv);
-digitalWrite(clockSourse, HIGH);
+digitalWrite(clockSource, HIGH);
 
 //flashLeds(mappedInterval, mappedIntervalDiv, tapping);
 //dimLeds(tapping);
 }
 void switchLoop(){
     if (debouncer.rose() ) {  // Button is pressed 
-    startTime = currentTime;
-    buttonPressed = true;
+      startTime = currentTime;
+      buttonPressed = true;
     }
     if (debouncer.fell()) { // Button is released
      buttonPressed = false;
@@ -178,10 +176,9 @@ void switchLoop(){
     }
 }
 void switchOnOff(){
-  //TODO tell system to switch to the off pin, also consider this in the hardware situation. 
   effectRunning = !effectRunning;
   digitalWrite(effectLED, effectRunning);
-  // do something with offPin
+  digitalWrite(relayPin, effectRunning);
 }
 
 void checkSingles(){
@@ -196,32 +193,32 @@ void reset(){
 }
 
 long int getInterval() { //TODO maybe add method to exclude outlier taps
-  long int toReturn = (lastTaptime - firstTapTime)/(timesTapped -1);
-  if (toReturn > maxInterval + 10000) { //in the following two if statements we commit to count time in the tapping methods in micros 
+  long int toReturn = (lastTapTime - firstTapTime)/(timesTapped -1);
+  if (toReturn > maxInterval + 10) { //in the following two if statements we commit to count time in the tapping methods in millis
     toReturn = maxInterval; //toReturn too high 
   }
-  if (toReturn < minInterval - 10000) {
+  if (toReturn < minInterval - 10) {
     toReturn = minInterval; //toReturn too low 
   }
   return toReturn;
 }
 void fireTap(){
   if (timesTapped == 0) {
-    firstTapTime = micros();
+    firstTapTime = millis();
     tapping = true; //TODO catch bug when we switch mode while tapping
     }
     timesTapped++; 
 }
-double getDivision(long int interval){
+double getFactor(long int interval){
   int toReturn;
-  int factor = analogRead(value);
+  int value = analogRead(factor);
   if (value > 600){
     toReturn = 1; 
   }
-  if (value<100){
+  if (value< 100){
     toReturn = 2; 
   }
-  if (value>100 && value < 700){ //this overrides values 600 - 700 from the above if condition. TODO which one should be changed. 
+  if (value > 100 && value < 700){ //this overrides values 600 - 700 from the above if condition. TODO which one should be changed. 
     toReturn = 2/3;
   }
   return toReturn;
