@@ -68,7 +68,7 @@ void checkSingles();
 long int getInterval();
 void fireTap();
 bool analogPotTurned();
-void calibrateDelay();
+//void calibrateDelay();
 void digitalPotWrite (int value);
 int considerFactor();
 void calculateFactorValue();
@@ -86,9 +86,9 @@ void setup() {
   debouncer.attach(tasterPin);
   debouncer.interval(25);
   
-  if (digitalRead(tasterPin)){ //if button is pressed during the start, we calibrate the device.
+ /* if (digitalRead(tasterPin)){ //if button is pressed during the start, we calibrate the device.
     calibrateDelay();
-  }
+  }*/
   
   if (EEPROM.readLong(0)==1){ //if something is stored in the eeprom, we read these values. 
     minInterval = EEPROM.readLong(4);
@@ -101,8 +101,8 @@ void setup() {
   digitalWrite(blueLED, switchmode); //blue SWITCHMODE, red TAPMODE
   digitalWrite(redLED, !switchmode);
   
-  pinMode(CALOUT, OUTPUT); //calibration pins 
-  pinMode(CALIN, INPUT);
+/*  pinMode(CALOUT, OUTPUT); //calibration pins 
+  pinMode(CALIN, INPUT);*/
   
   pinMode (factor, INPUT); //toggleswitch pin
   
